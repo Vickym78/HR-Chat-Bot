@@ -6,8 +6,4 @@ python-dotenv
 openai
 sentence-transformers
 faiss-cpu
-<<<<<<< HEAD
 numpy
-=======
-some-other-package
->>>>>>> some-commit-hash
