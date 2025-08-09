@@ -6,4 +6,8 @@ python-dotenv
 openai
 sentence-transformers
 faiss-cpu
+<<<<<<< HEAD
 numpy
+=======
+numpy
+>>>>>>> 218490c15e7635aa7982ea834f81c3e4ffc954d4
