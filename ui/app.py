@@ -3,7 +3,7 @@ import requests
 import time
 
 # --- Page Configuration ---
-st.set_page_config(page_title="HR Resource Query Chatbot 🤖", page_icon="🤖", layout="wide")
+st.set_page_config(page_title="Query Chatbot 🤖", page_icon="🤖", layout="wide")
 
 # --- Helper Functions ---
 def local_css():
