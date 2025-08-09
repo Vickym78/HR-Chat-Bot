@@ -8,76 +8,42 @@ from fastapi.middleware.cors import CORSMiddleware
 from .models import ChatQuery, ChatResponse, Employee
 from .rag_system import RAGSystem
 
-# --- App State ---
 app_state = {}
 
-# --- Lifespan Management ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     load_dotenv()
     print("Application starting up...")
     data_path = Path(__file__).parent.parent / "data" / "employees.json"
-    groq_key = os.getenv("GROQ_API_KEY")
-    if not groq_key:
+    if not os.getenv("GROQ_API_KEY"):
         raise ValueError("GROQ_API_KEY not found. Please set it in your .env file.")
     app_state["rag_system"] = RAGSystem(data_path=data_path)
     print("RAG System loaded and ready.")
     yield
-    print("Application shutting down...")
     app_state.clear()
+    print("Application shutting down.")
 
-# --- FastAPI App Initialization ---
-app = FastAPI(
-    title="HR Resource Query Chatbot API",
-    description="API for the HR chatbot with RAG capabilities",
-    lifespan=lifespan
-)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"],
-)
+app = FastAPI(title="HR Chatbot API", lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-# --- API Endpoints ---
 @app.post("/chat", response_model=ChatResponse)
 async def chat_with_bot(chat_query: ChatQuery = Body(...)):
-    """
-    Receives a user query and decides whether to handle it as an HR query or general chat.
-    """
-    rag_system: RAGSystem = app_state.get("rag_system")
-    if not rag_system:
-        raise HTTPException(status_code=503, detail="RAG system is not available.")
-    
-    # This threshold determines how relevant a query must be to be considered an HR query.
-    # Lower distance = more relevant. We can tune this value.
+    rag_system: RAGSystem = app_state["rag_system"]
     RELEVANCE_THRESHOLD = 1.0
-
-    # 1. Retrieval: Search for employees and get their relevance scores (distances)
     retrieved_employees, scores = rag_system.search(chat_query.query)
     
-    # 2. Intent Detection: Check if the top result's score is below the threshold
-    is_hr_query = bool(retrieved_employees and scores[0][0] < RELEVANCE_THRESHOLD)
-    
-    answer = ""
-    employees_to_return = []
-    
-    if is_hr_query:
-        # 3a. It's an HR query. Generate a response using the retrieved context.
+    if retrieved_employees and scores[0][0] < RELEVANCE_THRESHOLD:
         print(f"Handling as HR Query. Top score: {scores[0][0]}")
         answer = rag_system.generate_hr_response(chat_query.query, retrieved_employees)
-        employees_to_return = retrieved_employees
+        return ChatResponse(answer=answer, retrieved_employees=retrieved_employees)
     else:
-        # 3b. It's general chat. Generate a direct, conversational response.
-        print(f"Handling as General Chat. Top score: {scores[0][0]}")
+        score_info = scores[0][0] if retrieved_employees else 'N/A'
+        print(f"Handling as General Chat. Top score: {score_info}")
         answer = rag_system.generate_general_response(chat_query.query)
-        # We don't return any employees for general chat
-        employees_to_return = []
-
-    return ChatResponse(answer=answer, retrieved_employees=employees_to_return)
+        return ChatResponse(answer=answer, retrieved_employees=[])
 
 @app.get("/employees/search", response_model=List[Employee])
 async def search_employees(q: str):
-    rag_system: RAGSystem = app_state.get("rag_system")
-    if not rag_system:
-        raise HTTPException(status_code=503, detail="RAG system is not available.")
+    rag_system: RAGSystem = app_state["rag_system"]
     retrieved_employees, _ = rag_system.search(q, top_k=5)
     return retrieved_employees
